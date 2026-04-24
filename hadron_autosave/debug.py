@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-DEFAULT_DEBUG_LOG = Path.home() / ".xed" / "autosave" / "hadron-autosave.log"
+DEFAULT_DEBUG_LOG = Path.home() / ".xed" / "hadron-autosave" / "debug.log"
 
 
 class DebugLogger:

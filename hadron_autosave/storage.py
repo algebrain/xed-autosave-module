@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-DEFAULT_AUTOSAVE_DIR = Path.home() / ".xed" / "autosave"
+DEFAULT_AUTOSAVE_DIR = Path.home() / ".xed" / "hadron-autosave"
 
 
 class AutosaveStorage:

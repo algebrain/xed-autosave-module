@@ -3,10 +3,13 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from hadron_autosave.storage import AutosaveStorage
+from hadron_autosave.storage import AutosaveStorage, DEFAULT_AUTOSAVE_DIR
 
 
 class AutosaveStorageTest(unittest.TestCase):
+    def test_default_autosave_dir_is_hadron_specific(self):
+        self.assertEqual(DEFAULT_AUTOSAVE_DIR, Path.home() / ".xed" / "hadron-autosave")
+
     def test_reuses_autosave_path_for_same_document(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

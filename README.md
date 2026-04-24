@@ -18,7 +18,7 @@ to a private autosave directory and can be restored on the next Xed start.
 - Saves changed documents after 500 ms of inactivity.
 - Saves existing files in place through Xed, so the editor stays aware of the
   save operation.
-- Stores new unsaved documents in `~/.xed/autosave`.
+- Stores new unsaved documents in `~/.xed/hadron-autosave`.
 - Restores autosaved unsaved documents when the plugin starts.
 - Deletes an autosaved unsaved document when its tab is explicitly closed.
 - Keeps autosaved unsaved documents when the whole Xed window is closed, so
@@ -56,13 +56,13 @@ For a new unnamed document, edit the document and stop typing. After 500 ms, the
 plugin writes an autosaved copy to:
 
 ```text
-~/.xed/autosave
+~/.xed/hadron-autosave
 ```
 
 The autosave index is stored in:
 
 ```text
-~/.xed/autosave/index.json
+~/.xed/hadron-autosave/index.json
 ```
 
 ## Debug Logging
@@ -76,13 +76,13 @@ XED_AUTOSAVE_DEBUG=1 xed --standalone
 The default log file is:
 
 ```text
-~/.xed/autosave/hadron-autosave.log
+~/.xed/hadron-autosave/debug.log
 ```
 
 You can choose another log file:
 
 ```bash
-XED_AUTOSAVE_DEBUG=1 XED_AUTOSAVE_DEBUG_LOG=/tmp/hadron-autosave.log xed --standalone
+XED_AUTOSAVE_DEBUG=1 XED_AUTOSAVE_DEBUG_LOG=/tmp/hadron-autosave-debug.log xed --standalone
 ```
 
 This repository also includes a helper script for local testing:
@@ -99,7 +99,7 @@ Useful checks after changing the plugin:
 
 1. Start Xed through `./xed-debug.sh`.
 2. Create a new unnamed document, type text, wait briefly, and confirm that an
-   `unsaved-*.txt` file appears in `~/.xed/autosave`.
+   `unsaved-*.txt` file appears in `~/.xed/hadron-autosave`.
 3. Close only that tab and confirm that the corresponding `unsaved-*.txt` file
    and `index.json` entry are removed.
 4. Create another unnamed document, wait for autosave, close the whole Xed

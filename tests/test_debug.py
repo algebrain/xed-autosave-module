@@ -4,10 +4,16 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from hadron_autosave.debug import DebugLogger
+from hadron_autosave.debug import DebugLogger, DEFAULT_DEBUG_LOG
 
 
 class DebugLoggerTest(unittest.TestCase):
+    def test_default_debug_log_is_under_hadron_storage(self):
+        self.assertEqual(
+            DEFAULT_DEBUG_LOG,
+            Path.home() / ".xed" / "hadron-autosave" / "debug.log",
+        )
+
     def test_debug_logger_is_silent_when_disabled(self):
         stream = io.StringIO()
         logger = DebugLogger(enabled=False, stream=stream)
@@ -43,7 +49,7 @@ class DebugLoggerTest(unittest.TestCase):
         with mock.patch.dict("os.environ", {"XED_AUTOSAVE_DEBUG_LOG": ""}):
             logger = DebugLogger(enabled=False)
 
-        self.assertEqual(logger.path.name, "hadron-autosave.log")
+        self.assertEqual(logger.path, DEFAULT_DEBUG_LOG)
 
 
 if __name__ == "__main__":
