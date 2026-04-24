@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-DEFAULT_DEBUG_LOG = Path.home() / ".xed" / "autosave" / "debug.log"
+DEFAULT_DEBUG_LOG = Path.home() / ".xed" / "autosave" / "hadron-autosave.log"
 
 
 class DebugLogger:
@@ -19,7 +19,7 @@ class DebugLogger:
 
         suffix = "".join(f" {key}={value}" for key, value in fields.items())
         timestamp = datetime.now().isoformat(timespec="seconds")
-        line = f"{timestamp} [xed-autosave] {message}{suffix}\n"
+        line = f"{timestamp} [hadron-autosave] {message}{suffix}\n"
 
         if self.stream is not None:
             self.stream.write(line)

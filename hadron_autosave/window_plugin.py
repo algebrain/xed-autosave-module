@@ -20,8 +20,8 @@ class GLibClock:
         GLib.source_remove(timer_id)
 
 
-class XedAutosavePlugin(GObject.Object, Xed.WindowActivatable):
-    __gtype_name__ = "XedAutosavePlugin"
+class HadronAutosavePlugin(GObject.Object, Xed.WindowActivatable):
+    __gtype_name__ = "HadronAutosavePlugin"
 
     window = GObject.Property(type=Xed.Window)
 

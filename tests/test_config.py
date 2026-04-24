@@ -1,6 +1,6 @@
 import unittest
 
-from xed_autosave.config import AUTOSAVE_DELAY_MS
+from hadron_autosave.config import AUTOSAVE_DELAY_MS
 
 
 class ConfigTest(unittest.TestCase):

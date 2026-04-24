@@ -1,6 +1,6 @@
 import unittest
 
-from xed_autosave.scheduler import AutosaveScheduler
+from hadron_autosave.scheduler import AutosaveScheduler
 
 
 class FakeClock:
@@ -57,6 +57,17 @@ class AutosaveSchedulerTest(unittest.TestCase):
         scheduler.cancel_all()
 
         self.assertEqual(clock.cancelled, [1, 2])
+        self.assertEqual(clock.pending, {})
+        self.assertEqual(scheduler.pending_count, 0)
+
+    def test_forget_cancels_pending_timer(self):
+        clock = FakeClock()
+        scheduler = AutosaveScheduler(clock, 10_000, lambda doc: None)
+
+        scheduler.changed("doc-1")
+        scheduler.forget("doc-1")
+
+        self.assertEqual(clock.cancelled, [1])
         self.assertEqual(clock.pending, {})
         self.assertEqual(scheduler.pending_count, 0)
 

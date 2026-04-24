@@ -91,7 +91,7 @@ class XedApi:
 
 
 def _atomic_write_existing(path, text):
-    tmp_path = f"{path}.xed-autosave-tmp"
+    tmp_path = f"{path}.hadron-autosave-tmp"
     with open(tmp_path, "w", encoding="utf-8") as handle:
         handle.write(text)
     os.replace(tmp_path, path)

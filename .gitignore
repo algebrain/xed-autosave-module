@@ -6,3 +6,6 @@
 __pycache__/
 *.py[cod]
 .codex
+.venv/
+.coverage
+htmlcov/

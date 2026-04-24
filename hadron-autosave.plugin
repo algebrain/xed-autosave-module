@@ -1,8 +1,8 @@
 [Plugin]
 Loader=python3
-Module=xed_autosave
+Module=hadron_autosave
 IAge=3
-Name=Autosave
-Name[ru]=Автосохранение
+Name=Hadron Autosave
+Name[ru]=Адронное автосохранение
 Description=Automatically saves changed documents
 Description[ru]=Автоматически сохраняет измененные документы

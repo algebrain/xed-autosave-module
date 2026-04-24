@@ -1,4 +1,4 @@
-# Xed Autosave
+# Hadron Autosave
 
 > **Warning!**
 >
@@ -6,8 +6,8 @@
 > may be saved to disk automatically before you notice it. Use it only if you
 > are comfortable with automatic in-place saves.
 
-Autosave plugin for [Xed](https://github.com/linuxmint/xed), the Linux Mint
-text editor.
+Hadron Autosave plugin for [Xed](https://github.com/linuxmint/xed), the Linux
+Mint text editor.
 
 The plugin saves changed documents shortly after editing stops. Existing files
 are saved through Xed's own save mechanism. New, unnamed documents are written
@@ -32,18 +32,18 @@ directory:
 
 ```bash
 mkdir -p ~/.local/share/xed/plugins
-cp xed-autosave.plugin ~/.local/share/xed/plugins/
-cp -r xed_autosave ~/.local/share/xed/plugins/
+cp hadron-autosave.plugin ~/.local/share/xed/plugins/
+cp -r hadron_autosave ~/.local/share/xed/plugins/
 ```
 
 Then restart Xed and enable the plugin:
 
 ```text
-Edit -> Preferences -> Extensions -> Autosave
+Edit -> Preferences -> Extensions -> Hadron Autosave
 ```
 
-Depending on the desktop language, the plugin may appear as `Autosave` or
-`Автосохранение`.
+Depending on the desktop language, the plugin may appear as `Hadron Autosave`
+or `Адронное автосохранение`.
 
 ## Usage
 
@@ -76,19 +76,19 @@ XED_AUTOSAVE_DEBUG=1 xed --standalone
 The default log file is:
 
 ```text
-~/.xed/autosave/debug.log
+~/.xed/autosave/hadron-autosave.log
 ```
 
 You can choose another log file:
 
 ```bash
-XED_AUTOSAVE_DEBUG=1 XED_AUTOSAVE_DEBUG_LOG=/tmp/xed-autosave.log xed --standalone
+XED_AUTOSAVE_DEBUG=1 XED_AUTOSAVE_DEBUG_LOG=/tmp/hadron-autosave.log xed --standalone
 ```
 
 This repository also includes a helper script for local testing:
 
 ```bash
-./xed.local.sh
+./xed-debug.sh
 ```
 
 It starts Xed in standalone mode with debug logging enabled.
@@ -97,7 +97,7 @@ It starts Xed in standalone mode with debug logging enabled.
 
 Useful checks after changing the plugin:
 
-1. Start Xed through `./xed.local.sh`.
+1. Start Xed through `./xed-debug.sh`.
 2. Create a new unnamed document, type text, wait briefly, and confirm that an
    `unsaved-*.txt` file appears in `~/.xed/autosave`.
 3. Close only that tab and confirm that the corresponding `unsaved-*.txt` file
@@ -113,6 +113,13 @@ Run the test suite with the standard library test runner:
 
 ```bash
 python3 -m unittest discover -s tests -q
+```
+
+Run the test suite with coverage:
+
+```bash
+.venv/bin/python -m coverage run -m unittest discover -s tests -q
+.venv/bin/python -m coverage report -m
 ```
 
 The tests cover storage behavior, delayed scheduling, debug logging, document

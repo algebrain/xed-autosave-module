@@ -1,0 +1,6 @@
+[run]
+source = hadron_autosave
+
+[report]
+fail_under = 97
+show_missing = True

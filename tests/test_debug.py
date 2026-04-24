@@ -2,8 +2,9 @@ import io
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from xed_autosave.debug import DebugLogger
+from hadron_autosave.debug import DebugLogger
 
 
 class DebugLoggerTest(unittest.TestCase):
@@ -28,7 +29,7 @@ class DebugLoggerTest(unittest.TestCase):
 
     def test_debug_logger_writes_to_file_when_path_is_set(self):
         with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "xed-autosave.log"
+            path = Path(directory) / "hadron-autosave.log"
             logger = DebugLogger(enabled=True, path=path)
 
             logger("saved unsaved document", document_id="doc-1", path="autosave.txt")
@@ -37,6 +38,12 @@ class DebugLoggerTest(unittest.TestCase):
             self.assertIn("saved unsaved document", output)
             self.assertIn("document_id=doc-1", output)
             self.assertIn("path=autosave.txt", output)
+
+    def test_debug_logger_uses_hadron_default_log_path(self):
+        with mock.patch.dict("os.environ", {"XED_AUTOSAVE_DEBUG_LOG": ""}):
+            logger = DebugLogger(enabled=False)
+
+        self.assertEqual(logger.path.name, "hadron-autosave.log")
 
 
 if __name__ == "__main__":

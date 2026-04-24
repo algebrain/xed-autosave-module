@@ -1,6 +1,6 @@
 import unittest
 
-from xed_autosave.document_ids import DocumentIds
+from hadron_autosave.document_ids import DocumentIds
 
 
 class DocumentIdsTest(unittest.TestCase):

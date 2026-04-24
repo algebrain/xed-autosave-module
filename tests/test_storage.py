@@ -1,8 +1,9 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from xed_autosave.storage import AutosaveStorage
+from hadron_autosave.storage import AutosaveStorage
 
 
 class AutosaveStorageTest(unittest.TestCase):
@@ -62,6 +63,38 @@ class AutosaveStorageTest(unittest.TestCase):
             self.assertFalse(path.exists())
             self.assertEqual(storage.load_index()["documents"], [])
 
+    def test_delete_ignores_missing_autosave_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            storage = AutosaveStorage(Path(directory))
+            path = storage.save_unsaved("doc-1", "Untitled Document 1", "hello")
+            path.unlink()
+
+            storage.delete("doc-1")
+
+            self.assertEqual(storage.load_index()["documents"], [])
+
+    def test_load_index_returns_empty_for_invalid_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            storage = AutosaveStorage(Path(directory))
+
+            storage.index_path.parent.mkdir(parents=True, exist_ok=True)
+            storage.index_path.write_text("not json", encoding="utf-8")
+            self.assertEqual(storage.load_index(), {"documents": []})
+
+            storage.index_path.write_text("[]", encoding="utf-8")
+            self.assertEqual(storage.load_index(), {"documents": []})
+
+            storage.index_path.write_text('{"documents": {}}', encoding="utf-8")
+            self.assertEqual(storage.load_index(), {"documents": []})
+
+    def test_load_index_returns_empty_when_open_fails(self):
+        with tempfile.TemporaryDirectory() as directory:
+            storage = AutosaveStorage(Path(directory))
+
+            with mock.patch.object(Path, "exists", return_value=True):
+                with mock.patch.object(Path, "open", side_effect=OSError):
+                    self.assertEqual(storage.load_index(), {"documents": []})
+
     def test_restore_entries_skips_missing_files(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -70,6 +103,33 @@ class AutosaveStorageTest(unittest.TestCase):
             Path(root, "unsaved-doc-1.txt").unlink()
 
             self.assertEqual(storage.restore_entries(), [])
+
+    def test_restore_entries_skips_missing_path_and_uses_default_title(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            storage = AutosaveStorage(root)
+            root.mkdir(parents=True, exist_ok=True)
+            (root / "existing.txt").write_text("hello", encoding="utf-8")
+            storage._save_index({
+                "documents": [
+                    {"id": "missing-path"},
+                    {"id": "doc-1", "path": "existing.txt", "title": ""},
+                ],
+            })
+
+            entries = storage.restore_entries()
+
+            self.assertEqual(len(entries), 1)
+            self.assertEqual(entries[0]["title"], "Untitled Document")
+            self.assertEqual(entries[0]["text"], "hello")
+
+    def test_empty_safe_filename_falls_back_to_document(self):
+        with tempfile.TemporaryDirectory() as directory:
+            storage = AutosaveStorage(Path(directory))
+
+            path = storage.path_for_unsaved("!!!", "Untitled Document 1")
+
+            self.assertEqual(path.name, "unsaved-document.txt")
 
 
 if __name__ == "__main__":
