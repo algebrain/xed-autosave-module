@@ -1,5 +1,11 @@
 # Xed Autosave
 
+> **Warning!**
+>
+> This plugin can be dangerous. If you accidentally change a file, the change
+> may be saved to disk automatically before you notice it. Use it only if you
+> are comfortable with automatic in-place saves.
+
 Autosave plugin for [Xed](https://github.com/linuxmint/xed), the Linux Mint
 text editor.
 
@@ -118,4 +124,3 @@ Xed's Python plugin API does not expose every internal save operation directly.
 For already saved files, this plugin calls Xed's native save command from
 `libxed.so`. If that native command cannot be loaded, the plugin falls back to a
 direct file write as a last resort.
-
