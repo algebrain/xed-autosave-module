@@ -9,15 +9,18 @@
 Hadron Autosave plugin for [Xed](https://github.com/linuxmint/xed), the Linux
 Mint text editor.
 
-The plugin saves changed documents shortly after editing stops. Existing files
-are saved through Xed's own save mechanism. New, unnamed documents are written
-to a private autosave directory and can be restored on the next Xed start.
+The plugin saves changed documents shortly after editing stops. Before an
+existing file is autosaved, the previous on-disk version is copied to a private
+backup directory. New, unnamed documents are written to a private autosave
+directory and can be restored on the next Xed start.
 
 ## Features
 
 - Saves changed documents after 500 ms of inactivity.
-- Saves existing files in place through Xed, so the editor stays aware of the
-  save operation.
+- Saves existing files in place only after creating a backup of the previous
+  on-disk version.
+- Shows a warning bar for autosaved existing files.
+- Lets you restore the previous version or accept the current autosaved version.
 - Stores new unsaved documents in `~/.xed/hadron-autosave`.
 - Restores autosaved unsaved documents when the plugin starts.
 - Deletes an autosaved unsaved document when its tab is explicitly closed.
@@ -50,7 +53,27 @@ or `Адронное автосохранение`.
 After the plugin is enabled, no extra action is required.
 
 For an existing file, edit the document and stop typing. After 500 ms, the
-plugin asks Xed to save the file.
+plugin creates a backup of the current file on disk, then asks Xed to save the
+edited document.
+
+The backup is stored under:
+
+```text
+~/.xed/hadron-autosave/backups
+```
+
+After autosave, a warning bar appears above the text. It shows when the backup
+was last modified and provides two actions:
+
+- `Restore` restores the previous version from the backup, removes the backup,
+  and hides the warning bar.
+- `Accept Changes` keeps the current autosaved file, removes the backup, and
+  hides the warning bar.
+
+If the current Xed/GTK environment supports confirmation dialogs, both actions
+ask for confirmation first. If a backup exists when Xed starts, the original
+file is opened again and the warning bar is shown. If the file is opened
+manually while the backup still exists, the warning bar is shown as well.
 
 For a new unnamed document, edit the document and stop typing. After 500 ms, the
 plugin writes an autosaved copy to:
@@ -104,8 +127,16 @@ Useful checks after changing the plugin:
    and `index.json` entry are removed.
 4. Create another unnamed document, wait for autosave, close the whole Xed
    window, and confirm that the document is restored on the next start.
-5. Open a normal saved file, edit it, wait briefly, and confirm that Xed does
-   not show an external-change warning or a save confirmation on close.
+5. Open a normal saved file, edit it, wait briefly, and confirm that a backup
+   appears in `~/.xed/hadron-autosave/backups`.
+6. Confirm that the warning bar shows the backup time and has `Restore` and
+   `Accept Changes` buttons.
+7. Use `Restore` and confirm that the previous file contents return and the
+   backup is removed.
+8. Repeat the edit and use `Accept Changes`; confirm that the backup is removed
+   and the next edit creates a new backup.
+9. Leave a backup unresolved, close Xed, start Xed again, and confirm that the
+   original file opens with the warning bar.
 
 ## Development
 
@@ -122,8 +153,8 @@ Run the test suite with coverage:
 .venv/bin/python -m coverage report -m
 ```
 
-The tests cover storage behavior, delayed scheduling, debug logging, document
-identity tracking, configuration, and the Xed save wrapper.
+The tests cover storage behavior, backup behavior, delayed scheduling, debug
+logging, document identity tracking, configuration, and the Xed save wrapper.
 
 ## Notes
 

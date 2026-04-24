@@ -56,6 +56,9 @@ class FakeApi:
         self.title = {}
         self.saved_existing = []
         self.set_modified_calls = []
+        self.local_paths = {}
+        self.warning_bars = []
+        self.updated_text = []
 
     def get_documents(self):
         return self.documents
@@ -86,6 +89,17 @@ class FakeApi:
     def set_modified(self, document, modified):
         self.set_modified_calls.append((document, modified))
 
+    def get_local_path(self, document):
+        return self.local_paths.get(document)
+
+    def show_backup_warning_bar(self, document, backup, on_restore, on_accept):
+        bar = FakeWarningBar(document, backup, on_restore, on_accept)
+        self.warning_bars.append(bar)
+        return bar
+
+    def update_document_text(self, document, text, modified=False):
+        self.updated_text.append((document, text, modified))
+
 
 class FakeStorage:
     def __init__(self, entries=None):
@@ -93,9 +107,16 @@ class FakeStorage:
         self.removed = []
         self.deleted = []
         self.saved_unsaved = []
+        self.backups = {}
+        self.ensured_backups = []
+        self.restored = []
+        self.deleted_backups = []
 
     def restore_entries(self):
         return self.entries
+
+    def active_existing_file_backups(self):
+        return list(self.backups.values())
 
     def remove(self, document_id):
         self.removed.append(document_id)
@@ -106,6 +127,47 @@ class FakeStorage:
     def save_unsaved(self, document_id, title, text):
         self.saved_unsaved.append((document_id, title, text))
         return "autosave.txt"
+
+    def ensure_existing_file_backup(self, document_id, file_path):
+        self.ensured_backups.append((document_id, file_path))
+        backup = self.backups.setdefault(
+            file_path,
+            {
+                "file_path": file_path,
+                "path": f"backup-{file_path}",
+                "modified_at_display": "2026-04-24 14:10:12",
+            },
+        )
+        return backup
+
+    def backup_for_existing(self, file_path):
+        return self.backups.get(file_path)
+
+    def restore_existing_file_backup(self, file_path):
+        self.restored.append(file_path)
+        self.backups.pop(file_path, None)
+        return "restored text"
+
+    def read_existing_file_backup(self, file_path):
+        self.restored.append(file_path)
+        return "restored text"
+
+    def delete_existing_file_backup(self, file_path):
+        self.deleted_backups.append(file_path)
+        self.backups.pop(file_path, None)
+        return True
+
+
+class FakeWarningBar:
+    def __init__(self, document, backup, on_restore, on_accept):
+        self.document = document
+        self.backup = backup
+        self.on_restore = on_restore
+        self.on_accept = on_accept
+        self.closed = False
+
+    def close(self):
+        self.closed = True
 
 
 class FakeScheduler:
@@ -191,6 +253,7 @@ class WindowPluginTest(unittest.TestCase):
         plugin._window_handlers = []
         plugin._restored_ids = set()
         plugin._closing_window = False
+        plugin._warning_bars = {}
         plugin._scheduler = FakeScheduler(None, 500, plugin._autosave_document)
         return plugin
 
@@ -231,11 +294,30 @@ class WindowPluginTest(unittest.TestCase):
         )
         self.assertIs(plugin._scheduler, scheduler_ref[0])
 
+    def test_activate_shows_warning_for_existing_backup(self):
+        existing = FakeDocument("existing")
+        api = FakeApi([existing])
+        api.local_paths[existing] = "/tmp/saved.txt"
+        storage = FakeStorage()
+        storage.backups["/tmp/saved.txt"] = {"modified_at_display": "2026-04-24 14:10:12"}
+
+        self.module.XedApi = lambda window: api
+        self.module.AutosaveStorage = lambda: storage
+        self.module.DocumentIds = FakeDocumentIds
+        self.module.AutosaveScheduler = lambda *args: FakeScheduler(*args)
+
+        plugin = self.module.HadronAutosavePlugin()
+        plugin.window = FakeWindow()
+        plugin.do_activate()
+
+        self.assertEqual(len(api.warning_bars), 1)
+
     def test_deactivate_disconnects_documents_and_window_handlers(self):
         document = FakeDocument("doc")
         plugin = self._plugin()
         plugin._watch_document(document)
         plugin._window_handlers = ["window-tab-added"]
+        plugin._warning_bars[document] = FakeWarningBar(document, {}, lambda: None, lambda: None)
 
         plugin.do_deactivate()
 
@@ -244,6 +326,7 @@ class WindowPluginTest(unittest.TestCase):
         self.assertEqual(plugin.window.disconnected, ["window-tab-added"])
         self.assertEqual(plugin._handlers, {})
         self.assertEqual(plugin._window_handlers, [])
+        self.assertEqual(plugin._warning_bars, {})
 
     def test_update_state_is_noop(self):
         self.assertIsNone(self._plugin().do_update_state())
@@ -290,6 +373,18 @@ class WindowPluginTest(unittest.TestCase):
 
         self.assertEqual(plugin._document_ids.forgotten, [document])
 
+    def test_tab_added_shows_warning_for_existing_backup(self):
+        document = FakeDocument("doc")
+        api = FakeApi()
+        api.local_paths[document] = "/tmp/saved.txt"
+        storage = FakeStorage()
+        storage.backups["/tmp/saved.txt"] = {"modified_at_display": "2026-04-24 14:10:12"}
+        plugin = self._plugin(api=api, storage=storage)
+
+        plugin._on_tab_added(plugin.window, FakeTab(document))
+
+        self.assertEqual(len(api.warning_bars), 1)
+
     def test_window_delete_marks_closing_and_keeps_default_handler(self):
         plugin = self._plugin()
 
@@ -311,13 +406,43 @@ class WindowPluginTest(unittest.TestCase):
         api = FakeApi()
         api.locations[document] = True
         api.modified[document] = True
+        api.local_paths[document] = "/tmp/saved.txt"
         storage = FakeStorage()
         plugin = self._plugin(api=api, storage=storage)
 
         plugin._autosave_document(document)
 
+        self.assertEqual(storage.ensured_backups, [("id-doc", "/tmp/saved.txt")])
         self.assertEqual(api.saved_existing, [document])
         self.assertEqual(storage.removed, ["id-doc"])
+        self.assertEqual(len(api.warning_bars), 1)
+
+    def test_autosave_existing_document_without_local_path_does_not_save(self):
+        document = FakeDocument("doc")
+        api = FakeApi()
+        api.locations[document] = True
+        api.modified[document] = True
+        storage = FakeStorage()
+        plugin = self._plugin(api=api, storage=storage)
+
+        plugin._autosave_document(document)
+
+        self.assertEqual(storage.ensured_backups, [])
+        self.assertEqual(api.saved_existing, [])
+
+    def test_autosave_existing_document_does_not_save_when_backup_fails(self):
+        document = FakeDocument("doc")
+        api = FakeApi()
+        api.locations[document] = True
+        api.modified[document] = True
+        api.local_paths[document] = "/tmp/saved.txt"
+        storage = FakeStorage()
+        storage.ensure_existing_file_backup = lambda document_id, file_path: (_ for _ in ()).throw(OSError("no"))
+        plugin = self._plugin(api=api, storage=storage)
+
+        plugin._autosave_document(document)
+
+        self.assertEqual(api.saved_existing, [])
 
     def test_autosave_existing_unmodified_document_does_nothing(self):
         document = FakeDocument("doc")
@@ -353,6 +478,111 @@ class WindowPluginTest(unittest.TestCase):
         plugin._autosave_document(document)
 
         self.assertEqual(plugin._scheduler.forgotten, [])
+
+    def test_restore_backup_updates_document_and_hides_warning(self):
+        document = FakeDocument("doc")
+        api = FakeApi()
+        api.local_paths[document] = "/tmp/saved.txt"
+        storage = FakeStorage()
+        storage.backups["/tmp/saved.txt"] = {"modified_at_display": "2026-04-24 14:10:12"}
+        plugin = self._plugin(api=api, storage=storage)
+        plugin._show_backup_warning(document)
+
+        plugin._restore_existing_backup(document)
+
+        self.assertEqual(storage.restored, ["/tmp/saved.txt"])
+        self.assertEqual(api.updated_text, [(document, "restored text", True)])
+        self.assertEqual(api.saved_existing, [document])
+        self.assertTrue(api.warning_bars[0].closed)
+        self.assertEqual(plugin._warning_bars, {})
+
+    def test_accept_backup_deletes_backup_and_hides_warning(self):
+        document = FakeDocument("doc")
+        api = FakeApi()
+        api.local_paths[document] = "/tmp/saved.txt"
+        storage = FakeStorage()
+        storage.backups["/tmp/saved.txt"] = {"modified_at_display": "2026-04-24 14:10:12"}
+        plugin = self._plugin(api=api, storage=storage)
+        plugin._show_backup_warning(document)
+
+        plugin._accept_existing_backup(document)
+
+        self.assertEqual(storage.deleted_backups, ["/tmp/saved.txt"])
+        self.assertTrue(api.warning_bars[0].closed)
+        self.assertEqual(plugin._warning_bars, {})
+
+    def test_show_backup_warning_does_not_duplicate_bar(self):
+        document = FakeDocument("doc")
+        api = FakeApi()
+        api.local_paths[document] = "/tmp/saved.txt"
+        storage = FakeStorage()
+        storage.backups["/tmp/saved.txt"] = {"modified_at_display": "2026-04-24 14:10:12"}
+        plugin = self._plugin(api=api, storage=storage)
+
+        plugin._show_backup_warning(document)
+        plugin._show_backup_warning(document)
+
+        self.assertEqual(len(api.warning_bars), 1)
+
+    def test_show_backup_warning_without_path_or_backup_does_nothing(self):
+        document = FakeDocument("doc")
+        api = FakeApi()
+        storage = FakeStorage()
+        plugin = self._plugin(api=api, storage=storage)
+
+        plugin._show_backup_warning(document)
+        api.local_paths[document] = "/tmp/saved.txt"
+        plugin._show_backup_warning(document)
+
+        self.assertEqual(api.warning_bars, [])
+
+    def test_restore_backup_without_path_does_nothing(self):
+        document = FakeDocument("doc")
+        storage = FakeStorage()
+        plugin = self._plugin(storage=storage)
+
+        plugin._restore_existing_backup(document)
+
+        self.assertEqual(storage.restored, [])
+
+    def test_restore_backup_error_keeps_warning_visible(self):
+        document = FakeDocument("doc")
+        api = FakeApi()
+        api.local_paths[document] = "/tmp/saved.txt"
+        storage = FakeStorage()
+        storage.backups["/tmp/saved.txt"] = {"modified_at_display": "2026-04-24 14:10:12"}
+        storage.read_existing_file_backup = lambda file_path: (_ for _ in ()).throw(OSError("no"))
+        plugin = self._plugin(api=api, storage=storage)
+        plugin._show_backup_warning(document)
+
+        plugin._restore_existing_backup(document)
+
+        self.assertIn(document, plugin._warning_bars)
+        self.assertFalse(api.warning_bars[0].closed)
+
+    def test_accept_backup_without_path_does_nothing(self):
+        document = FakeDocument("doc")
+        storage = FakeStorage()
+        plugin = self._plugin(storage=storage)
+
+        plugin._accept_existing_backup(document)
+
+        self.assertEqual(storage.deleted_backups, [])
+
+    def test_accept_backup_error_keeps_warning_visible(self):
+        document = FakeDocument("doc")
+        api = FakeApi()
+        api.local_paths[document] = "/tmp/saved.txt"
+        storage = FakeStorage()
+        storage.backups["/tmp/saved.txt"] = {"modified_at_display": "2026-04-24 14:10:12"}
+        storage.delete_existing_file_backup = lambda file_path: (_ for _ in ()).throw(OSError("no"))
+        plugin = self._plugin(api=api, storage=storage)
+        plugin._show_backup_warning(document)
+
+        plugin._accept_existing_backup(document)
+
+        self.assertIn(document, plugin._warning_bars)
+        self.assertFalse(api.warning_bars[0].closed)
 
 
 if __name__ == "__main__":

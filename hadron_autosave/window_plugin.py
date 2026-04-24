@@ -32,6 +32,7 @@ class HadronAutosavePlugin(GObject.Object, Xed.WindowActivatable):
         self._handlers = {}
         self._window_handlers = []
         self._restored_ids = set()
+        self._warning_bars = {}
         self._closing_window = False
         self._scheduler = AutosaveScheduler(
             GLibClock(),
@@ -40,6 +41,7 @@ class HadronAutosavePlugin(GObject.Object, Xed.WindowActivatable):
         )
 
         self._restore_unsaved_documents()
+        self._open_existing_file_backups()
         for document in self._api.get_documents():
             self._watch_document(document)
 
@@ -61,6 +63,9 @@ class HadronAutosavePlugin(GObject.Object, Xed.WindowActivatable):
     def do_deactivate(self):
         self._scheduler.cancel_all()
 
+        for document in list(self._warning_bars):
+            self._hide_backup_warning(document)
+
         for document, handler_id in list(self._handlers.items()):
             document.disconnect(handler_id)
         self._handlers.clear()
@@ -81,6 +86,15 @@ class HadronAutosavePlugin(GObject.Object, Xed.WindowActivatable):
             self._document_ids.set(document, entry["id"])
             self._restored_ids.add(entry["id"])
 
+    def _open_existing_file_backups(self):
+        for backup in self._storage.active_existing_file_backups():
+            file_path = backup.get("file_path")
+            if not file_path:
+                continue
+            document = self._api.open_existing_file(file_path)
+            if document is not None:
+                self._watch_document(document)
+
     def _watch_document(self, document):
         if document in self._handlers:
             return
@@ -88,6 +102,7 @@ class HadronAutosavePlugin(GObject.Object, Xed.WindowActivatable):
         self._handlers[document] = handler_id
         document_id = self._document_ids.get(document)
         debug("watching document", document_id=document_id)
+        self._show_backup_warning(document)
 
     def _unwatch_document(self, document, delete_unsaved=False):
         document_id = self._document_ids.get(document)
@@ -96,6 +111,7 @@ class HadronAutosavePlugin(GObject.Object, Xed.WindowActivatable):
         if handler_id is not None:
             document.disconnect(handler_id)
         self._scheduler.forget(document)
+        self._hide_backup_warning(document)
 
         if delete_unsaved and not self._api.has_location(document):
             self._storage.delete(document_id)
@@ -126,8 +142,14 @@ class HadronAutosavePlugin(GObject.Object, Xed.WindowActivatable):
         try:
             if self._api.has_location(document):
                 if self._api.is_modified(document):
+                    file_path = self._api.get_local_path(document)
+                    if not file_path:
+                        debug("skipped existing document without local path", document_id=document_id)
+                        return
+                    self._storage.ensure_existing_file_backup(document_id, file_path)
                     self._api.save_existing(document)
                     self._storage.remove(document_id)
+                    self._show_backup_warning(document)
                     debug("saved existing document", document_id=document_id)
                 return
 
@@ -140,5 +162,65 @@ class HadronAutosavePlugin(GObject.Object, Xed.WindowActivatable):
             debug(
                 "autosave failed",
                 document_id=document_id,
+                error=f"{type(error).__name__}: {error}",
+            )
+
+    def _show_backup_warning(self, document):
+        if document in self._warning_bars:
+            return
+
+        file_path = self._api.get_local_path(document)
+        if not file_path:
+            return
+
+        backup = self._storage.backup_for_existing(file_path)
+        if backup is None:
+            return
+
+        handle = self._api.show_backup_warning_bar(
+            document,
+            backup,
+            lambda: self._restore_existing_backup(document),
+            lambda: self._accept_existing_backup(document),
+        )
+        self._warning_bars[document] = handle
+
+    def _hide_backup_warning(self, document):
+        handle = self._warning_bars.pop(document, None)
+        if handle is not None:
+            handle.close()
+
+    def _restore_existing_backup(self, document):
+        file_path = self._api.get_local_path(document)
+        if not file_path:
+            return
+
+        try:
+            text = self._storage.read_existing_file_backup(file_path)
+            self._api.update_document_text(document, text, modified=True)
+            self._api.save_existing(document)
+            self._storage.delete_existing_file_backup(file_path)
+            self._hide_backup_warning(document)
+            debug("restored existing document backup", file_path=file_path)
+        except Exception as error:
+            debug(
+                "restore existing backup failed",
+                file_path=file_path,
+                error=f"{type(error).__name__}: {error}",
+            )
+
+    def _accept_existing_backup(self, document):
+        file_path = self._api.get_local_path(document)
+        if not file_path:
+            return
+
+        try:
+            if self._storage.delete_existing_file_backup(file_path):
+                self._hide_backup_warning(document)
+                debug("accepted existing document autosave", file_path=file_path)
+        except Exception as error:
+            debug(
+                "accept existing backup failed",
+                file_path=file_path,
                 error=f"{type(error).__name__}: {error}",
             )
