@@ -1,0 +1,8 @@
+[Plugin]
+Loader=python3
+Module=xed_autosave
+IAge=3
+Name=Autosave
+Name[ru]=Автосохранение
+Description=Automatically saves changed documents
+Description[ru]=Автоматически сохраняет измененные документы
